@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IDS — Intrusion Detection System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07090f;
+  --s1:#0d1117;
+  --s2:#161b27;
+  --s3:#1e2637;
+  --border:#1f2d45;
+  --green:#00ff88;
+  --red:#ff3355;
+  --blue:#38bdf8;
+  --yellow:#fbbf24;
+  --purple:#a78bfa;
+  --text:#e2e8f0;
+  --muted:#4b6080;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+
+/* ── HEADER ─────────────────────────────── */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 32px;
+  background:var(--s1);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.logo{display:flex;align-items:center;gap:10px;font-size:1.1rem;font-weight:700;letter-spacing:.5px}
+.logo-shield{
+  width:34px;height:34px;
+  background:linear-gradient(135deg,var(--green),var(--blue));
+  border-radius:8px;display:grid;place-items:center;font-size:17px;
+}
+.live{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── MAIN ───────────────────────────────── */
+main{padding:28px 32px;max-width:1440px;margin:0 auto}
+
+/* ── UPLOAD ─────────────────────────────── */
+#uploadSection{margin-bottom:0}
+.drop-zone{
+  border:2px dashed var(--border);border-radius:14px;
+  padding:56px 40px;text-align:center;cursor:pointer;
+  background:var(--s1);transition:all .25s;
+  position:relative;overflow:hidden;
+}
+.drop-zone::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 120%,rgba(0,255,136,.06) 0%,transparent 60%);
+  pointer-events:none;
+}
+.drop-zone:hover,.drop-zone.over{border-color:var(--green);background:rgba(0,255,136,.04)}
+.drop-zone input{display:none}
+.drop-icon{font-size:52px;margin-bottom:14px;display:block}
+.drop-zone h2{font-size:1.15rem;margin-bottom:6px}
+.drop-zone p{color:var(--muted);font-size:.88rem;margin-bottom:22px}
+.btn-upload{
+  padding:11px 30px;
+  background:linear-gradient(135deg,var(--green),#00cc6a);
+  color:#000;border:none;border-radius:8px;
+  font-weight:700;font-size:.9rem;cursor:pointer;
+  transition:transform .2s,box-shadow .2s;
+}
+.btn-upload:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,255,136,.3)}
+
+/* ── LOADER ─────────────────────────────── */
+#loader{display:none;text-align:center;padding:60px}
+#loader.on{display:block}
+.spin{
+  width:46px;height:46px;border:3px solid var(--border);
+  border-top-color:var(--green);border-radius:50%;
+  animation:spin .75s linear infinite;margin:0 auto 14px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── RESULTS ────────────────────────────── */
+#results{display:none}
+#results.on{display:block}
+
+.fname{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--s2);border:1px solid var(--border);
+  border-radius:6px;padding:4px 12px;
+  font-size:.78rem;color:var(--muted);margin-bottom:20px;
+}
+
+/* ── CARDS ──────────────────────────────── */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+@media(max-width:768px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--accent,var(--blue));
+}
+.card-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px}
+.card-val{font-size:1.9rem;font-weight:700;color:var(--accent,var(--blue))}
+.card.c-blue{--accent:var(--blue)}
+.card.c-red{--accent:var(--red)}
+.card.c-green{--accent:var(--green)}
+.card.c-yellow{--accent:var(--yellow)}
+
+/* ── CHARTS GRID ────────────────────────── */
+.charts-grid{display:grid;grid-template-columns:260px 1fr 1fr;gap:16px;margin-bottom:22px}
+@media(max-width:1024px){.charts-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.charts-grid{grid-template-columns:1fr}}
+
+.panel{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:12px;padding:18px;
+}
+.panel-title{
+  font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--muted);margin-bottom:14px;
+}
+.chart-box{position:relative;height:200px}
+
+
+/* ── TABLE ──────────────────────────────── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{
+  padding:11px 14px;text-align:left;
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--muted);border-bottom:1px solid var(--border);
+  background:var(--s2);white-space:nowrap;
+}
+td{padding:10px 14px;border-bottom:1px solid var(--border)}
+tr:hover td{background:var(--s2)}
+tr.is-attack td{background:rgba(255,51,85,.04)}
+tr.is-attack:hover td{background:rgba(255,51,85,.08)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:.73rem;font-weight:600}
+.badge.atk{background:rgba(255,51,85,.15);color:var(--red)}
+.badge.ok{background:rgba(0,255,136,.1);color:var(--green)}
+
+.bar-row{display:flex;align-items:center;gap:8px}
+.bar-bg{flex:1;height:4px;background:var(--s3);border-radius:2px;overflow:hidden}
+.bar-fg{height:100%;border-radius:2px;transition:width .4s}
+.bar-pct{font-size:.75rem;color:var(--muted);min-width:36px;text-align:right}
+
+.rn{color:var(--muted);font-size:.78rem}
+
+/* ── SCROLLBAR ──────────────────────────── */
+#distList::-webkit-scrollbar{width:3px}
+#distList::-webkit-scrollbar-track{background:transparent}
+#distList::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+#distList::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ── RESET BTN ──────────────────────────── */
+.reset{margin-top:22px;text-align:center}
+.reset button{
+  padding:9px 26px;background:transparent;
+  border:1px solid var(--border);color:var(--text);
+  border-radius:8px;cursor:pointer;font-size:.85rem;
+  transition:all .2s;
+}
+.reset button:hover{border-color:var(--green);color:var(--green)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-shield">🛡</div>
+    IDS&nbsp;<span style="color:var(--muted);font-weight:400;font-size:.95rem">Intrusion Detection System</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="live"><div class="dot"></div>Model Online</div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Model</span>
+      <select id="modelSelect"
+        style="background:var(--s2);border:1px solid var(--border);color:var(--text);
+               border-radius:7px;padding:6px 10px;font-size:.82rem;cursor:pointer;outline:none">
+        <option value="xgboost">XGBoost</option>
+        <option value="random_forest">Random Forest</option>
+        <option value="lightgbm">LightGBM</option>
+      </select>
+    </div>
+    <button id="btnScanAgain" onclick="resetUI()"
+      style="display:none;padding:7px 18px;background:transparent;border:1px solid var(--green);
+             color:var(--green);border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600;
+             transition:all .2s"
+      onmouseover="this.style.background='rgba(0,255,136,.1)'"
+      onmouseout="this.style.background='transparent'">
+      ↩ Scan Again
+    </button>
+  </div>
+</header>
+
+<main>
+
+<!-- UPLOAD -->
+<div id="uploadSection">
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".csv"/>
+    <span class="drop-icon">📡</span>
+    <h2>Drop Network Traffic CSV</h2>
+    <p>Drag & drop your capture file here, or click to browse</p>
+    <button class="btn-upload" onclick="document.getElementById('fileInput').click()">Select CSV File</button>
+  </div>
+</div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="spin"></div>
+  <p style="color:var(--muted);font-size:.9rem">Analyzing traffic patterns…</p>
+</div>
+
+<!-- RESULTS -->
+<div id="results">
+
+  <div class="fname" id="fname"></div>
+
+  <!-- STAT CARDS -->
+  <div class="cards">
+    <div class="card c-blue"><div class="card-label">Total Rows</div><div class="card-val" id="cTotal">—</div></div>
+    <div class="card c-red"><div class="card-label">Attacks Detected</div><div class="card-val" id="cAttacks">—</div></div>
+    <div class="card c-green"><div class="card-label">Benign Traffic</div><div class="card-val" id="cBenign">—</div></div>
+    <div class="card c-yellow"><div class="card-label">Attack Rate</div><div class="card-val" id="cRate">—</div></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+
+    <!-- Donut — full class distribution -->
+    <div class="panel">
+      <div class="panel-title">Traffic Distribution</div>
+      <div style="position:relative;height:170px">
+        <canvas id="chartDonut"></canvas>
+      </div>
+      <div id="distList" style="margin-top:10px;max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;scrollbar-width:thin;scrollbar-color:var(--border) transparent"></div>
+    </div>
+
+    <!-- Bar — attack types -->
+    <div class="panel">
+      <div class="panel-title">Attack Type Breakdown</div>
+      <div class="chart-box"><canvas id="chartBar"></canvas></div>
+    </div>
+
+    <!-- Line — probability timeline -->
+    <div class="panel">
+      <div class="panel-title">Attack Probability Timeline</div>
+      <div class="chart-box"><canvas id="chartLine"></canvas></div>
+    </div>
+
+  </div>
+
+  <!-- TABLE -->
+  <div class="panel">
+    <div class="panel-title">Prediction Details</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Row</th>
+            <th>Verdict</th>
+            <th>Attack Type</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="reset"><button onclick="resetUI()">↩ Scan Another File</button></div>
+</div>
+
+</main>
+
+<script>
+// Chart instances
+let charts = {};
+
+// ── Drag & drop ──────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) run(f);
+  else alert('Please drop a CSV file.');
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) run(e.target.files[0]);
+});
+
+// ── Upload & predict ─────────────────────
+async function run(file) {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('loader').classList.add('on');
+
+  const form = new FormData();
+  form.append('file', file);
+  const modelName = document.getElementById('modelSelect').value;
+
+  try {
+    const res = await fetch(`/predict?model_name=${modelName}`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt);
+    }
+    const data = await res.json();
+    render(data, file.name);
+  } catch (err) {
+    alert('Error: ' + err.message);
+    resetUI();
+  } finally {
+    document.getElementById('loader').classList.remove('on');
+  }
+}
+
+// ── Render ───────────────────────────────
+function render(data, fname) {
+  const { summary, predictions } = data;
+
+  // filename
+  document.getElementById('fname').textContent = '📂 ' + fname;
+
+  // cards
+  document.getElementById('cTotal').textContent = summary.total_rows.toLocaleString();
+  document.getElementById('cAttacks').textContent = summary.attacks_detected.toLocaleString();
+  document.getElementById('cBenign').textContent = summary.benign.toLocaleString();
+  const rate = summary.total_rows > 0
+    ? ((summary.attacks_detected / summary.total_rows) * 100).toFixed(1)
+    : '0.0';
+  document.getElementById('cRate').textContent = rate + '%';
+
+  // destroy old charts
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  // ── 1. Donut — all class distribution ──
+  const allClasses = { 'Benign': summary.benign, ...summary.attack_breakdown };
+  const classLabels = Object.keys(allClasses);
+  const classVals   = Object.values(allClasses);
+  const total = classVals.reduce((a, b) => a + b, 0);
+
+  const palette = [
+    '#00ff88','#ff3355','#fbbf24','#38bdf8','#a78bfa',
+    '#f97316','#34d399','#f472b6','#60a5fa','#facc15',
+    '#4ade80','#fb923c','#c084fc','#22d3ee'
+  ];
+
+  charts.donut = new Chart(document.getElementById('chartDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: classLabels,
+      datasets: [{
+        data: classVals,
+        backgroundColor: classLabels.map((_, i) => palette[i % palette.length] + 'aa'),
+        borderColor:     classLabels.map((_, i) => palette[i % palette.length]),
+        borderWidth: 1.5,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${((ctx.parsed/total)*100).toFixed(1)}%)`
+          }
+        }
+      },
+      animation: { animateScale: true }
+    }
+  });
+
+  // Class list below donut
+  const distList = document.getElementById('distList');
+  distList.innerHTML = '';
+  classLabels.forEach((label, i) => {
+    const cnt = classVals[i];
+    const pct = ((cnt / total) * 100).toFixed(1);
+    const color = palette[i % palette.length];
+    distList.innerHTML += `
+      <div style="display:flex;align-items:center;gap:7px;font-size:.75rem">
+        <span style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0"></span>
+        <span style="flex:1;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</span>
+        <span style="color:var(--muted);min-width:36px;text-align:right">${cnt.toLocaleString()}</span>
+        <span style="color:var(--muted);min-width:38px;text-align:right">${pct}%</span>
+      </div>`;
+  });
+
+  // ── 2. Bar — attack breakdown ──
+  const breakdown = summary.attack_breakdown || {};
+  const bKeys = Object.keys(breakdown).sort((a,b) => breakdown[b] - breakdown[a]);
+  const bVals = bKeys.map(k => breakdown[k]);
+
+  const barColors = [
+    'rgba(255,51,85,.75)','rgba(251,191,36,.75)','rgba(167,139,250,.75)',
+    'rgba(56,189,248,.75)','rgba(52,211,153,.75)','rgba(248,113,113,.75)',
+  ];
+
+  charts.bar = new Chart(document.getElementById('chartBar'), {
+    type: 'bar',
+    data: {
+      labels: bKeys.length ? bKeys : ['No attacks'],
+      datasets: [{
+        label: 'Count',
+        data: bVals.length ? bVals : [0],
+        backgroundColor: bKeys.map((_, i) => barColors[i % barColors.length]),
+        borderRadius: 5,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: bKeys.length > 4 ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: { ticks: { color: '#4b6080', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+        y: { ticks: { color: '#4b6080', font: { size: 10 } }, grid: { color: '#1f2d45' } },
+      }
+    }
+  });
+
+  // ── 3. Line — probability timeline ──
+  // sample max 300 points to keep chart readable
+  const step = Math.max(1, Math.floor(predictions.length / 300));
+  const sampled = predictions.filter((_, i) => i % step === 0);
+
+  const lineLabels = sampled.map(p => p.row);
+  const lineData   = sampled.map(p => +(p.confidence * 100).toFixed(1));
+  const pointColors = sampled.map(p => p.is_attack ? '#ff3355' : '#00ff88');
+
+  charts.line = new Chart(document.getElementById('chartLine'), {
+    type: 'line',
+    data: {
+      labels: lineLabels,
+      datasets: [{
+        label: 'Confidence %',
+        data: lineData,
+        borderColor: '#38bdf8',
+        borderWidth: 1.5,
+        pointBackgroundColor: pointColors,
+        pointRadius: sampled.length > 100 ? 1.5 : 3,
+        pointHoverRadius: 5,
+        fill: true,
+        backgroundColor: 'rgba(56,189,248,.07)',
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const p = sampled[ctx.dataIndex];
+              return `${p.is_attack ? '⚠ ' + p.prediction : '✓ Benign'} — ${ctx.parsed.y}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#4b6080', font: { size: 9 }, maxTicksLimit: 8 },
+          grid: { color: '#1f2d45' }
+        },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: '#4b6080', font: { size: 9 }, callback: v => v + '%' },
+          grid: { color: '#1f2d45' }
+        }
+      }
+    }
+  });
+
+  // ── Table ──
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  predictions.forEach(p => {
+    const isAtk = p.is_attack;
+    const pct = Math.round(p.confidence * 100);
+    const barColor = isAtk ? 'var(--red)' : 'var(--green)';
+    const tr = document.createElement('tr');
+    if (isAtk) tr.classList.add('is-attack');
+    tr.innerHTML = `
+      <td class="rn">${p.row}</td>
+      <td><span class="badge ${isAtk ? 'atk' : 'ok'}">${isAtk ? '⚠ Attack' : '✓ Benign'}</span></td>
+      <td>${isAtk ? p.prediction : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>
+        <div class="bar-row">
+          <div class="bar-bg"><div class="bar-fg" style="width:${pct}%;background:${barColor}"></div></div>
+          <span class="bar-pct">${pct}%</span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('results').classList.add('on');
+  document.getElementById('btnScanAgain').style.display = 'block';
+}
+
+// ── Reset ─────────────────────────────────
+function resetUI() {
+  document.getElementById('results').classList.remove('on');
+  document.getElementById('uploadSection').style.display = 'block';
+  document.getElementById('btnScanAgain').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+</script>
+</body>
+</html>
