@@ -14,6 +14,9 @@ data/
 models/
 results/
 
+# Exploratory notebook (scratch work, kept local)
+notebooks/
+
 # OS / editor
 .DS_Store
 Thumbs.db
