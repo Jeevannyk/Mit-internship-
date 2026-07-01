@@ -1,3 +1,4 @@
+import os
 import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -55,6 +56,7 @@ def prepare_data(df, augment_minority=True):
 
     # Save the exact training feature list/order so inference can reindex to it
     # (tree models use positional columns — wrong order = silent bad predictions).
+    os.makedirs("models", exist_ok=True)
     joblib.dump(list(X.columns), "models/feature_names.pkl")
 
     # Encode string labels (Benign, SQL Injection, DoS-Hulk ...) to integers.
