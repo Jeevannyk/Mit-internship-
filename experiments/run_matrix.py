@@ -41,7 +41,7 @@ RARE = ["SQL Injection", "Brute Force -Web", "Brute Force -XSS"]
 def build_model(name, seed):
     if name == "rf":
         return RandomForestClassifier(
-            n_estimators=200, n_jobs=-1, random_state=seed,
+            n_estimators=100, n_jobs=-1, random_state=seed,
             class_weight="balanced_subsample",
         )
     return XGBClassifier(
@@ -71,7 +71,7 @@ def score(model, X_test, y_test, le):
     return row
 
 
-def run(files, seed, top_k):
+def run(files, seed, top_k, models, aug, out):
     print(f"Loading {len(files)} file(s)...")
     df = pd.concat([pd.read_csv(f, low_memory=False) for f in files],
                    ignore_index=True)
@@ -80,18 +80,26 @@ def run(files, seed, top_k):
     # Clean + dedup + split, WITHOUT augmentation (we apply our own below).
     X_train, X_test, y_train, y_test, le = prepare_data(df, augment_minority=False)
 
+    os.makedirs("results", exist_ok=True)
+    path = out
     results = []
-    for strategy in ["none", "smote", "ctgan"]:
+
+    def flush():
+        # Save after every experiment so a late crash keeps completed rows.
+        pd.DataFrame(results).to_csv(path, index=False)
+
+    for strategy in aug:
         print(f"\n=== Augmentation: {strategy} ===")
         X_aug, y_aug = augment(X_train, y_train, le, strategy=strategy, seed=seed)
 
-        for model_name in ["rf", "xgb"]:
+        for model_name in models:
             # --- all features ---
             model = build_model(model_name, seed)
             model.fit(X_aug, y_aug)
             row = {"strategy": strategy, "model": model_name,
                    "features": "all", "n_features": X_aug.shape[1], **score(model, X_test, y_test, le)}
             results.append(row)
+            flush()
             print(f"  {model_name}/all   macro_f1={row['macro_f1']}")
 
             # --- SHAP-selected features (reuse the model above for ranking) ---
@@ -102,12 +110,10 @@ def run(files, seed, top_k):
                      "features": "shap", "n_features": len(selected),
                      **score(model_s, X_test[selected], y_test, le)}
             results.append(row_s)
+            flush()
             print(f"  {model_name}/shap  macro_f1={row_s['macro_f1']}")
 
     out = pd.DataFrame(results)
-    os.makedirs("results", exist_ok=True)
-    path = "results/experiment_results.csv"
-    out.to_csv(path, index=False)
     print(f"\nSaved {len(out)} rows -> {path}")
     print(out.to_string(index=False))
 
@@ -118,7 +124,14 @@ if __name__ == "__main__":
     ap.add_argument("--all", action="store_true", help="use all 9 day files")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--top-k", type=int, default=30, help="SHAP features to keep")
+    ap.add_argument("--models", nargs="+", default=["rf", "xgb"],
+                    choices=["rf", "xgb"], help="which models to run")
+    ap.add_argument("--aug", nargs="+", default=["none", "smote", "ctgan"],
+                    choices=["none", "smote", "ctgan"],
+                    help="which augmentation strategies to run")
+    ap.add_argument("--out", default="results/experiment_results.csv",
+                    help="output CSV path (use separate files for local vs Colab)")
     args = ap.parse_args()
 
     files = ALL_FILES if args.all else (args.files or ALL_FILES[:2])
-    run(files, args.seed, args.top_k)
+    run(files, args.seed, args.top_k, args.models, args.aug, args.out)
