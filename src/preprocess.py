@@ -1,3 +1,4 @@
+import joblib
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -6,7 +7,11 @@ import numpy as np
 from tqdm import tqdm
 
 
-def prepare_data(df):
+def prepare_data(df, augment_minority=True):
+    # augment_minority=True keeps the old RandomOverSampler behaviour (used by
+    # main.py). The augmentation experiment passes False to get a clean split,
+    # then applies its own None/SMOTE/CTGAN strategy via src/augment.py.
+
     # Drop columns that are identifiers / not useful as features.
     # errors="ignore" => no crash if a column isn't present in this dataset.
     cols_to_drop = [
@@ -41,8 +46,18 @@ def prepare_data(df):
     print("Clipping float32 overflow...")
     df[feature_cols] = df[feature_cols].clip(-float32_max, float32_max)
 
+    # Drop exact-duplicate flows. CIC-IDS2018 has many identical rows; with a
+    # random split copies leak into BOTH train and test, faking ~100% accuracy.
+    before = len(df)
+    df = df.drop_duplicates()
+    print(f"Dropped {before - len(df)} duplicate rows ({len(df)} remain)")
+
     X = df.drop("Label", axis=1)
     y_str = df["Label"]
+
+    # Save the exact training feature list/order so inference can reindex to it
+    # (tree models use positional columns — wrong order = silent bad predictions).
+    joblib.dump(list(X.columns), "models/feature_names.pkl")
 
     # Encode string labels (Benign, SQL Injection, DoS-Hulk ...) to integers.
     le = LabelEncoder()
@@ -52,19 +67,20 @@ def prepare_data(df):
         X, y_enc, test_size=0.2, random_state=42, stratify=y_enc,
     )
 
-    # Oversample minority attack classes up to 5000 samples each.
-    benign_label = le.transform(["Benign"])[0]
-    counts = pd.Series(y_train_enc).value_counts()
-    strategy = {
-        cls: 3000
-        for cls in counts.index
-        if cls != benign_label and counts[cls] < 3000
-    }
+    # Oversample minority attack classes up to 3000 samples each (optional).
+    if augment_minority:
+        benign_label = le.transform(["Benign"])[0]
+        counts = pd.Series(y_train_enc).value_counts()
+        strategy = {
+            cls: 3000
+            for cls in counts.index
+            if cls != benign_label and counts[cls] < 3000
+        }
 
-    if strategy:
-        print(f"Oversampling: {[le.classes_[c] for c in strategy]}")
-        ros = RandomOverSampler(random_state=42, sampling_strategy=strategy)
-        X_train, y_train_enc = ros.fit_resample(X_train, y_train_enc)
-        print(f"After oversampling — total rows: {len(y_train_enc)}")
+        if strategy:
+            print(f"Oversampling: {[le.classes_[c] for c in strategy]}")
+            ros = RandomOverSampler(random_state=42, sampling_strategy=strategy)
+            X_train, y_train_enc = ros.fit_resample(X_train, y_train_enc)
+            print(f"After oversampling — total rows: {len(y_train_enc)}")
 
     return X_train, X_test, y_train_enc, y_test_enc, le

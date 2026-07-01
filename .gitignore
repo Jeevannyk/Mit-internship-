@@ -17,6 +17,10 @@ results/
 # Exploratory notebook (scratch work, kept local)
 notebooks/
 
+# Private / local-only (internship brief, personal notes)
+Internship.pdf
+tools.md
+
 # OS / editor
 .DS_Store
 Thumbs.db

@@ -1,9 +1,13 @@
 pandas
 numpy
 scikit-learn
+lightgbm
+xgboost
 joblib
 tqdm
 imbalanced-learn
+ctgan
+shap
 fastapi
 uvicorn[standard]
 python-multipart

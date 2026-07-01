@@ -1,3 +1,4 @@
+import joblib
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -21,5 +22,10 @@ def preprocess_for_inference(df: pd.DataFrame) -> pd.DataFrame:
 
     float32_max = np.finfo(np.float32).max
     df[feature_cols] = df[feature_cols].clip(-float32_max, float32_max)
+
+    # Reindex to the exact columns/order the model was trained on. Missing cols
+    # are filled with 0, extras dropped — keeps positional features aligned.
+    feature_names = joblib.load("models/feature_names.pkl")
+    df = df.reindex(columns=feature_names, fill_value=0)
 
     return df
