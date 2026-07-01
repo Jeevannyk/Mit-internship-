@@ -12,7 +12,7 @@ import pandas as pd
 import shap
 
 
-def select_features_shap(model, X, top_k=30, sample=5000, seed=42):
+def select_features_shap(model, X, top_k=30, sample=1000, seed=42):
     """Return (selected_feature_names, full_ranking_series).
 
     SHAP is computed on a random `sample` of rows (full data is too slow).
