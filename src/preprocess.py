@@ -29,22 +29,20 @@ def prepare_data(df, augment_minority=True):
 
     feature_cols = [c for c in df.columns if c != "Label"]
 
-    # Force each column to numeric (stray header rows leave object dtype).
-    # tqdm shows one bar per column so you see progress instead of a blank screen.
-    converted = {}
+    # Force each column to numeric IN PLACE. The old version built a separate
+    # dict + DataFrame copy, tripling memory and OOM-ing on 12 GB machines.
     for col in tqdm(feature_cols, desc="Converting columns to numeric"):
-        converted[col] = pd.to_numeric(df[col], errors="coerce")
-    df[feature_cols] = pd.DataFrame(converted, index=df.index)
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Replace inf and NaN.
+    # Replace inf/NaN on the feature columns only (Label is a string).
     print("Cleaning inf/NaN...")
-    df = df.replace([np.inf, -np.inf], np.nan)
-    df = df.fillna(0)
+    df[feature_cols] = df[feature_cols].replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    # Clip values too large for float32 (sklearn converts internally).
+    # Clip to float32 range AND downcast to float32 — halves memory vs float64,
+    # which is what lets dedup + training fit on a 12 GB (Colab) machine.
     float32_max = np.finfo(np.float32).max
-    print("Clipping float32 overflow...")
-    df[feature_cols] = df[feature_cols].clip(-float32_max, float32_max)
+    print("Clipping + downcasting to float32...")
+    df[feature_cols] = df[feature_cols].clip(-float32_max, float32_max).astype("float32")
 
     # Drop exact-duplicate flows. CIC-IDS2018 has many identical rows; with a
     # random split copies leak into BOTH train and test, faking ~100% accuracy.
