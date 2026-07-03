@@ -18,6 +18,8 @@ import pickle
 import sys
 import time
 
+import joblib
+
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, f1_score
@@ -71,7 +73,7 @@ def score(model, X_test, y_test, le):
     return row
 
 
-def run(files, seed, top_k, models, aug, out):
+def run(files, seed, top_k, shap_sample, models, aug, out):
     print(f"Loading {len(files)} file(s)...")
     df = pd.concat([pd.read_csv(f, low_memory=False) for f in files],
                    ignore_index=True)
@@ -100,10 +102,12 @@ def run(files, seed, top_k, models, aug, out):
                    "features": "all", "n_features": X_aug.shape[1], **score(model, X_test, y_test, le)}
             results.append(row)
             flush()
-            print(f"  {model_name}/all   macro_f1={row['macro_f1']}")
+            model_path = f"models/{strategy}_{model_name}_all.pkl"
+            joblib.dump(model, model_path)
+            print(f"  {model_name}/all   macro_f1={row['macro_f1']}  saved -> {model_path}")
 
             # --- SHAP-selected features (reuse the model above for ranking) ---
-            selected, _ = select_features_shap(model, X_aug, top_k=top_k, seed=seed)
+            selected, _ = select_features_shap(model, X_aug, top_k=top_k, sample=shap_sample, seed=seed)
             model_s = build_model(model_name, seed)
             model_s.fit(X_aug[selected], y_aug)
             row_s = {"strategy": strategy, "model": model_name,
@@ -111,7 +115,9 @@ def run(files, seed, top_k, models, aug, out):
                      **score(model_s, X_test[selected], y_test, le)}
             results.append(row_s)
             flush()
-            print(f"  {model_name}/shap  macro_f1={row_s['macro_f1']}")
+            model_s_path = f"models/{strategy}_{model_name}_shap.pkl"
+            joblib.dump(model_s, model_s_path)
+            print(f"  {model_name}/shap  macro_f1={row_s['macro_f1']}  saved -> {model_s_path}")
 
     out = pd.DataFrame(results)
     print(f"\nSaved {len(out)} rows -> {path}")
@@ -124,6 +130,7 @@ if __name__ == "__main__":
     ap.add_argument("--all", action="store_true", help="use all 9 day files")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--top-k", type=int, default=30, help="SHAP features to keep")
+    ap.add_argument("--shap-sample", type=int, default=5000, help="rows sampled for SHAP (use 500 for RF)")
     ap.add_argument("--models", nargs="+", default=["rf", "xgb"],
                     choices=["rf", "xgb"], help="which models to run")
     ap.add_argument("--aug", nargs="+", default=["none", "smote", "ctgan"],
@@ -134,4 +141,4 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     files = ALL_FILES if args.all else (args.files or ALL_FILES[:2])
-    run(files, args.seed, args.top_k, args.models, args.aug, args.out)
+    run(files, args.seed, args.top_k, args.shap_sample, args.models, args.aug, args.out)
